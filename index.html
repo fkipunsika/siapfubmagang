@@ -486,30 +486,50 @@
             return div.innerHTML;
         }
 
-        // URL Web App dari Google Apps Script setelah Anda online-kan (Deploy)
-        const WEB_APP_URL = "";
+        // ============================================================
+        // PENTING: Isi URL Web App Google Apps Script Anda di sini!
+        // Cara mendapatkan URL:
+        //   1. Buka Apps Script > Deploy > Manage Deployments
+        //   2. Salin URL dari deployment yang aktif
+        //   3. Tempel di bawah ini (ganti teks GANTI_DENGAN_URL_APPS_SCRIPT_ANDA)
+        // ============================================================
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyrLc0yLa6URy0fuHAYXi7CwiG_XaDA3yrDtMi9gVX4mwOqepJrfHJe9ByxeBkG4SKZ/exec";
 
-        // Memicu sistem agar menggunakan server asli (bukan mode simulasi) saat di GitHub
-        if (WEB_APP_URL !== "") {
-            window.google = { script: { run: {} } };
+        // Deteksi mode: jika WEB_APP_URL sudah diisi, gunakan server sungguhan
+        // Jika belum diisi, akan masuk ke mode simulasi (hanya untuk testing lokal)
+        var _isServerMode = (WEB_APP_URL !== "" && WEB_APP_URL !== "GANTI_DENGAN_URL_APPS_SCRIPT_ANDA");
+        if (_isServerMode) {
+            // Override window.google agar kode tahu bahwa kita tidak di dalam GAS iframe
+            window.google = window.google || { script: { run: {} } };
         }
 
         function gasRun(funcName) {
             var args = Array.prototype.slice.call(arguments, 1);
             
-            // Pengaman jika Anda lupa mengisi URL Web App
-            if (WEB_APP_URL === "") {
+            // Cek apakah URL sudah dikonfigurasi
+            if (!_isServerMode) {
                 return new Promise(function(resolve, reject) {
-                    Swal.fire('Konfigurasi Belum Selesai', 'Silakan isi konstanta WEB_APP_URL di Index.html dengan URL Web App Anda!', 'error');
-                    reject(new Error("URL Web App belum dikonfigurasi."));
+                    Swal.fire(
+                        'Konfigurasi Diperlukan',
+                        'Isi konstanta <b>WEB_APP_URL</b> di file index.html dengan URL Google Apps Script Web App Anda, lalu deploy ulang ke GitHub.',
+                        'warning'
+                    );
+                    reject(new Error("WEB_APP_URL belum dikonfigurasi."));
                 });
             }
 
+            // fetch ke Google Apps Script
+            // redirect:follow WAJIB karena GAS selalu melakukan redirect sebelum memberikan respons
             return fetch(WEB_APP_URL, {
                 method: 'POST',
+                redirect: 'follow',
+                headers: { 'Content-Type': 'text/plain' },
                 body: JSON.stringify({ functionName: funcName, arguments: args })
             })
-            .then(function(response) { return response.json(); })
+            .then(function(response) {
+                if (!response.ok) throw new Error('HTTP error: ' + response.status);
+                return response.json();
+            })
             .then(function(res) {
                 if (res.success === false) {
                     throw new Error(res.error || "Terjadi kesalahan di server.");
@@ -560,7 +580,8 @@
                 
                 showFullPageLoading('Otentikasi...');
                 
-                if (typeof google === 'undefined') {
+                if (!_isServerMode) {
+                    // MODE SIMULASI: hanya untuk testing lokal sebelum WEB_APP_URL diisi
                     setTimeout(function() {
                         if(p === '123456') {
                             hideFullPageLoading();
@@ -579,11 +600,12 @@
                             Auth.login('sim_token', simUser, _authKey);
                             checkLoginState();
                         } else {
-                            Swal.fire('Error', 'Username/Password salah', 'error');
+                            Swal.fire('Error', 'Username/Password salah (Mode Simulasi)', 'error');
                         }
                         hideFullPageLoading();
                     }, 800);
                 } else {
+                    // MODE SERVER: panggil Google Apps Script yang sesungguhnya
                     gasRun('loginUser', u, p).then(function(res) {
                         hideFullPageLoading();
                         if (res.success) {
@@ -595,11 +617,11 @@
                                 checkLoginState();
                             }
                         } else {
-                            Swal.fire('Gagal', res.message, 'error');
+                            Swal.fire('Gagal Login', res.message || 'Username/Password salah!', 'error');
                         }
                     }).catch(function(err) {
                         hideFullPageLoading();
-                        Swal.fire('Error', err.message, 'error');
+                        Swal.fire('Koneksi Gagal', 'Tidak dapat menghubungi server. Pastikan Apps Script sudah di-deploy dan URL benar.<br><small class="text-muted">' + err.message + '</small>', 'error');
                     });
                 }
             };
@@ -615,7 +637,7 @@
                 if(np === '123456') return Swal.fire('Error', 'Pilih password yang berbeda dengan password default!', 'warning');
                 
                 showFullPageLoading('Menyimpan password baru...');
-                if(typeof google === 'undefined') {
+                if(!_isServerMode) {
                     setTimeout(function() {
                         hideFullPageLoading();
                         var m = bootstrap.Modal.getInstance(document.getElementById('modalGantiPassword'));
@@ -642,7 +664,7 @@
             var formUser = document.getElementById('formUser');
             if(formUser) formUser.addEventListener('submit', window.handleUserSubmit);
 
-            if (typeof google === 'undefined') {
+            if (!_isServerMode) {
                 var pInfo = document.getElementById('previewLoginInfo');
                 if (pInfo) pInfo.classList.remove('d-none');
             }
@@ -687,7 +709,7 @@
         }
 
         window.logout = function() {
-            if (WEB_APP_URL !== "https://script.google.com/a/macros/fkip.unsika.ac.id/s/AKfycbxJSRzdTQZnmfrrNFWIHyk6qlmGrtaAEETYjcDGSE7Qd4nJrsGM2q41vU83qDlZvbEi/exec" && Auth.getToken()) {
+            if (_isServerMode && Auth.getToken()) {
                 gasRun('destroySession', Auth.getToken());
             }
             Auth.clear();
@@ -721,7 +743,7 @@
                 if(!silent) showSectionLoading('assessorTableBody');
             }
 
-            if (typeof google === 'undefined') {
+            if (!_isServerMode) {
                 setTimeout(function() {
                     if(activePage !== reqPage && !silent) return;
                     if(pageId === 'page-admin') {
@@ -941,7 +963,7 @@
                 appData.files.push({ id: tempId, jenis_file: fileType, file_name: file.name, file_url: '#', _isSyncing: true });
                 renderMhsDashboard();
                 
-                if(typeof google === 'undefined') {
+                if(!_isServerMode) {
                     setTimeout(function() {
                         var idx = appData.files.findIndex(function(x){return x.id === tempId;});
                         if(idx > -1) { appData.files[idx]._isSyncing = false; appData.files[idx].file_url = '#'; }
@@ -1082,7 +1104,7 @@ function renderDplReport() {
                 appData._isUploadingDpl = true;
                 renderDplReport();
                 
-                if(typeof google === 'undefined') {
+                if(!_isServerMode) {
                     setTimeout(function() {
                         appData._isUploadingDpl = false;
                         appData.laporanDpl = { file_name: file.name, file_url: '#' };
@@ -1259,7 +1281,7 @@ function renderDplReport() {
             var m = bootstrap.Modal.getInstance(document.getElementById('modalNilai'));
             if(m) m.hide();
 
-            if (typeof google === 'undefined') {
+            if (!_isServerMode) {
                 setTimeout(function() {
                     if(mhsItem) { 
                         delete mhsItem._isSyncing; 
@@ -1303,7 +1325,7 @@ function renderDplReport() {
                     if(mhsItem) mhsItem._isSyncing = true;
                     renderAssessorDashboard();
 
-                    if(typeof google === 'undefined') {
+                    if(!_isServerMode) {
                         setTimeout(function(){
                             if(mhsItem) { delete mhsItem._isSyncing; mhsItem.is_validated = true; mhsItem.nilai_akhir = '88.5'; }
                             renderAssessorDashboard();
