@@ -487,10 +487,10 @@
         }
 
         // URL Web App dari Google Apps Script setelah Anda online-kan (Deploy)
-        const WEB_APP_URL = "SALIN_URL_WEB_APP_ANDA_DISINI";
+        const WEB_APP_URL = "";
 
         // Memicu sistem agar menggunakan server asli (bukan mode simulasi) saat di GitHub
-        if (WEB_APP_URL !== "SALIN_URL_WEB_APP_ANDA_DISINI") {
+        if (WEB_APP_URL !== "") {
             window.google = { script: { run: {} } };
         }
 
@@ -498,7 +498,7 @@
             var args = Array.prototype.slice.call(arguments, 1);
             
             // Pengaman jika Anda lupa mengisi URL Web App
-            if (WEB_APP_URL === "SALIN_URL_WEB_APP_ANDA_DISINI") {
+            if (WEB_APP_URL === "") {
                 return new Promise(function(resolve, reject) {
                     Swal.fire('Konfigurasi Belum Selesai', 'Silakan isi konstanta WEB_APP_URL di Index.html dengan URL Web App Anda!', 'error');
                     reject(new Error("URL Web App belum dikonfigurasi."));
